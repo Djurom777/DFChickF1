@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @StateObject private var onboardingViewModel = OnboardingViewModel()
@@ -26,6 +27,19 @@ struct ContentView: View {
                 withAnimation(.easeInOut(duration: 0.5)) {
                     showOnboarding = false
                 }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RestartOnboarding"))) { _ in
+            withAnimation(.easeInOut(duration: 0.5)) {
+                showOnboarding = true
+                // Reset onboarding view model to start fresh
+                onboardingViewModel.currentStep = .welcome
+                onboardingViewModel.isCompleted = false
+                onboardingViewModel.selectedLanguages = []
+                onboardingViewModel.nativeLanguage = nil
+                onboardingViewModel.difficultyLevel = .beginner
+                onboardingViewModel.dailyGoal = 15
+                onboardingViewModel.notificationsEnabled = true
             }
         }
     }
@@ -1089,6 +1103,12 @@ struct AccountSettingsView: View {
         
         // Clear language service data
         languageService.resetAllData()
+        
+        // Reset onboarding flag to show onboarding again
+        UserDefaults.standard.set(false, forKey: "onboardingCompleted")
+        
+        // Post notification to trigger onboarding restart
+        NotificationCenter.default.post(name: NSNotification.Name("RestartOnboarding"), object: nil)
         
         // Dismiss the view
         dismiss()

@@ -27,7 +27,7 @@ struct OnboardingView: View {
                         }
                     }
                     .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-                    .disabled(true) // Disable swipe gestures
+                    .gesture(DragGesture().onChanged { _ in }) // Disable swipe gestures without disabling buttons
                 }
                 
                 // Navigation buttons
@@ -35,6 +35,15 @@ struct OnboardingView: View {
             }
         }
         .animation(.easeInOut, value: viewModel.currentStep)
+    }
+    
+    // MARK: - Computed Properties
+    private var availableLanguagesForLearning: [Language] {
+        LanguageService.shared.availableLanguages.filter { language in
+            language.isAvailable && 
+            language.code != "en" &&
+            language.id != viewModel.nativeLanguage?.id
+        }
     }
     
     private var progressBar: some View {
@@ -238,16 +247,22 @@ struct OnboardingView: View {
                     .foregroundColor(.white)
                 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
-                    ForEach(LanguageService.shared.availableLanguages) { language in
-                        if language.id != viewModel.nativeLanguage?.id {
-                            LanguageCard(
-                                language: language,
-                                isSelected: viewModel.selectedLanguages.contains { $0.id == language.id }
-                            ) {
-                                viewModel.selectLanguage(language)
-                            }
+                    ForEach(availableLanguagesForLearning) { language in
+                        LanguageCard(
+                            language: language,
+                            isSelected: viewModel.selectedLanguages.contains { $0.id == language.id }
+                        ) {
+                            viewModel.selectLanguage(language)
                         }
                     }
+                }
+                
+                if availableLanguagesForLearning.isEmpty {
+                    Text("Please select your native language first")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.7))
+                        .frame(maxWidth: .infinity)
+                        .padding()
                 }
             }
         }
@@ -410,7 +425,7 @@ struct LanguageCard: View {
     let action: () -> Void
     
     var body: some View {
-        Button(action: language.isAvailable ? action : {}) {
+        Button(action: action) {
             VStack(spacing: 8) {
                 ZStack {
                     Text(language.flag)
